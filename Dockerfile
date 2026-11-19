@@ -12,7 +12,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OLLAMA_MAX_LOADED_MODELS=1 \
     OLLAMA_CONTEXT_LENGTH=2048 \
     OLLAMA_MAX_QUEUE=2 \
-    OMP_NUM_THREADS=2
+    OMP_NUM_THREADS=2 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
