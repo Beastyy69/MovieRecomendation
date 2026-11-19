@@ -29,7 +29,7 @@ AI_GATE = asyncio.Semaphore(1)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "user_preferences.db")))
 CORS_ORIGINS = [origin.strip().rstrip("/") for origin in os.getenv(
-    "CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501,http://localhost:5173,http://127.0.0.1:5173"
+    "CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501,http://localhost:5173,http://127.0.0.1:5173,https://cinesense-6s8i.onrender.com"
 ).split(",") if origin.strip()]
 
 app = FastAPI(title="CineSense Local AI", version="2.0")
