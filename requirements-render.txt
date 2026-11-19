@@ -6,5 +6,7 @@ python-dotenv==1.2.4
 pydantic==2.14.4
 numpy==2.5.5
 pandas==3.1.1
+# movies.pkl contains pandas Arrow-backed strings; required to unpickle them.
+pyarrow==26.0.1
 scipy==1.18.1
 scikit-learn==1.9.1

@@ -27,5 +27,7 @@ COPY deploy/runtime.py deploy/runtime.py
 # Bake Gemma's blobs and manifest into the image, not Git or ephemeral startup downloads.
 RUN python deploy/runtime.py --prepare-model
 COPY main.py movies.pkl tfidf_matrix.pkl tfidf_vectorizer.pkl indices.pkl movies_metadata.csv ./
+# Fail during image build if a serialized model dependency is missing.
+RUN python -c "import main; main.load_model(); print('Catalog artifacts loaded:', len(main.df))"
 EXPOSE 10000
 CMD ["python", "deploy/runtime.py"]
