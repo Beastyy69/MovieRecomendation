@@ -242,10 +242,25 @@ def detect_genres(text: str) -> set[str]:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    online, model_available = False, False
     try:
-        async with httpx.AsyncClient(timeout=1.5) as client: online = (await client.get(f"{OLLAMA_URL}/api/tags")).is_success
-    except httpx.HTTPError: online = False
-    return {"status": "ok", "model_loaded": df is not None, "ollama_online": online, "ollama_model": OLLAMA_MODEL}
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            response = await client.get(f"{OLLAMA_URL}/api/tags")
+            response.raise_for_status()
+            online = True
+            model_available = any(item.get("name") == OLLAMA_MODEL for item in response.json().get("models", []))
+    except (httpx.HTTPError, ValueError):
+        pass
+    return {"status": "ok", "model_loaded": df is not None, "ollama_online": online,
+            "ollama_model": OLLAMA_MODEL, "ollama_model_available": model_available}
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    """Render probes catalog readiness without waiting for an AI inference."""
+    if df is None:
+        raise HTTPException(status_code=503, detail="Catalog loading")
+    return {"status": "ok"}
 
 
 @app.get("/movies/search")
