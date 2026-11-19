@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+user_preferences.db
+*.db-shm
+*.db-wal
+frontend/node_modules/
+frontend/dist/
+.env.*
+!.env.example
+!frontend/.env.example
+models/
+!models/README.md
+*.log
+.pytest_cache/
+.DS_Store
