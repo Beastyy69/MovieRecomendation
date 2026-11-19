@@ -7,10 +7,11 @@ import SpotlightCard from './reactbits/SpotlightCard';
 
 const sid = localStorage.getItem('cinesense-session') || crypto.randomUUID();
 localStorage.setItem('cinesense-session', sid);
-const api = import.meta.env.VITE_API_URL || '/api';
+const api = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 
 async function request(path, options) {
-  const timeout = AbortSignal.timeout(60000);
+  // CPU-hosted Gemma may need longer than ordinary catalog requests.
+  const timeout = AbortSignal.timeout(path === '/assistant/chat' ? 150000 : 60000);
   const signal = options?.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   const response = await fetch(api + path, {...options, signal});
   if (!response.ok) {
