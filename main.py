@@ -633,31 +633,92 @@ def read_preferences(session_id: str) -> list[dict[str, Any]]:
     return records
 
 
-async def gemma(message: str, movies: list[dict[str, Any]]) -> str | None:
-    titles = ", ".join(f'"{m["title"]}"' for m in movies[:6])
-    context = "\n".join(f"- {m['title']} ({', '.join(m['genres'])}): {m['overview'][:180]}" for m in movies[:6])
-    prompt = f"""You are CineSense, a movie recommendation assistant. Reply in Hinglish if the user writes Hinglish. 
-IMPORTANT: Only discuss these exact movies: {titles}. Never invent or mention any title not in this list.
-Explain why the top 2-4 of these match the user's request. Be concise (3-5 sentences). Do not use markdown formatting.
 
-User: {message}
-Movies:
-{context}"""
-    try:
-        await asyncio.wait_for(AI_GATE.acquire(), timeout=0.1)
-    except TimeoutError:
+async def gemma(
+    message: str,
+    movies: list[dict[str, Any]]
+) -> str | None:
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+    if not api_key or not movies:
         return None
+
+    context = "\n".join(
+        f"- {m['title']} "
+        f"({', '.join(m['genres'])}): "
+        f"{m.get('overview', '')[:180]}"
+        for m in movies[:6]
+    )
+
+    prompt = f"""
+You are CineSense, an AI movie recommendation assistant.
+
+Rules:
+- Respond in Hinglish if the user uses Hinglish.
+- Recommend only movies provided in the catalog below.
+- Do not invent movies.
+- Explain why the top 2-4 recommendations match.
+- Give a concise, friendly response.
+- Do not use Markdown.
+
+User request:
+{message}
+
+Available movie recommendations:
+{context}
+"""
+
+    url = (
+        f"https://generativelanguage.googleapis.com/"
+        f"v1beta/models/{model}:generateContent"
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 350
+        }
+    }
+
     try:
-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT_SECONDS) as client:
-            r = await client.post(f"{OLLAMA_URL}/api/chat", json={"model": OLLAMA_MODEL,
-                "messages": [{"role":"user","content":prompt}], "stream":False,
-                "keep_alive":"5m", "options":{"temperature":.3, "num_ctx":2048, "num_predict":200}})
-            r.raise_for_status()
-            return r.json().get("message", {}).get("content")
-    except (httpx.HTTPError, ValueError):
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                url,
+                headers={"x-goog-api-key": api_key},
+                json=payload
+            )
+
+            response.raise_for_status()
+            data = response.json()
+
+            parts = (
+                data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [])
+            )
+
+            return " ".join(
+                part["text"]
+                for part in parts
+                if "text" in part
+            ).strip() or None
+
+    except (httpx.HTTPError, ValueError, IndexError, KeyError) as exc:
+        print(
+            f"Gemini API request failed: "
+            f"{type(exc).__name__}"
+        )
         return None
-    finally:
-        AI_GATE.release()
+
 
 
 def _validate_gemma_response(response: str | None, movies: list[dict[str, Any]]) -> str:
@@ -715,6 +776,6 @@ async def chat(value: ChatRequest) -> dict[str, Any]:
     response = _validate_gemma_response(raw_response, movies)
 
     if not ai_available:
-        response = "Gemma abhi busy ya unavailable hai. Yeh recommendations aapki request ke genre aur content se match karti hain. AI explanation ke liye thodi der baad retry karein."
+        response = _fallback_explanation(movies)
 
     return {"reply": response, "recommendations": movies, "ai_available": ai_available, "detected_genres": list(detected_genres)}
