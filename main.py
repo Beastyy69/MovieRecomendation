@@ -24,10 +24,13 @@ load_dotenv(ROOT / ".env")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:2b")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
-DB_PATH = ROOT / "user_preferences.db"
+DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "user_preferences.db")))
+CORS_ORIGINS = [origin.strip().rstrip("/") for origin in os.getenv(
+    "CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501,http://localhost:5173,http://127.0.0.1:5173"
+).split(",") if origin.strip()]
 
 app = FastAPI(title="CineSense Local AI", version="2.0")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:8501", "http://127.0.0.1:8501", "http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True, allow_methods=["GET", "POST"], allow_headers=["*"])
 df: pd.DataFrame | None = None
 matrix: Any = None
 vectorizer: Any = None
@@ -88,6 +91,7 @@ def normalise(value: str) -> str:
 
 
 def init_db() -> None:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(DB_PATH)) as con:
         con.execute("""CREATE TABLE IF NOT EXISTS preferences (
             session_id TEXT, title TEXT, interaction TEXT, rating REAL,
