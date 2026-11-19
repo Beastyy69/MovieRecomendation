@@ -198,23 +198,86 @@ def personal_score(session_id: str) -> tuple[np.ndarray, set[int]]:
     return np.clip(score, -1, 1), watched
 
 
-def rank(content: np.ndarray, session_id: str, limit: int, source: int | None = None, genre_filter: set[str] | None = None) -> list[dict[str, Any]]:
+
+def rank(
+    content: np.ndarray,
+    session_id: str,
+    limit: int,
+    source: int | None = None,
+    genre_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
     assert df is not None
+
     user, watched = personal_score(session_id)
+    content = np.asarray(content, dtype=float)
+
     raw_pop = numeric_column("popularity").to_numpy(float)
-    pop = np.log1p(np.maximum(raw_pop, 0)); pop = pop / pop.max() if pop.max() else pop
-    final = .55 * content + .30 * user + .15 * pop
+    pop = np.log1p(np.maximum(raw_pop, 0))
+    pop = pop / pop.max() if pop.max() else pop
+
+    # Similar movies should share multiple genres where possible.
+    genre_score = np.zeros(len(df), dtype=float)
+    source_genres = set()
+
+    if source is not None:
+        source_genres = set(genres(df.iloc[source].get("genres", "")))
+
+    for i in range(len(df)):
+        movie_genres = set(genres(df.iloc[i].get("genres", "")))
+        if source_genres and movie_genres:
+            overlap = len(source_genres & movie_genres)
+            genre_score[i] = overlap / len(source_genres | movie_genres)
+
+    if source is not None:
+        # Selected movie dominates the ranking.
+        final = (
+            0.80 * content
+            + 0.15 * genre_score
+            + 0.04 * user
+            + 0.01 * pop
+        )
+    else:
+        # Keep personalization for general discovery/chat.
+        final = (
+            0.82 * content
+            + 0.16 * user
+            + 0.02 * pop
+        )
+
+    candidates = np.argsort(final)[::-1]
     output = []
-    for i in np.argsort(final)[::-1]:
-        if int(i) in watched or int(i) == source: continue
-        # Apply genre filter if specified
-        if genre_filter:
-            movie_genres = set(genres(df.iloc[int(i)].get("genres", "")))
-            if not movie_genres.intersection(genre_filter):
+
+    for idx in candidates:
+        i = int(idx)
+
+        if i in watched or i == source:
+            continue
+
+        movie_genres = set(genres(df.iloc[i].get("genres", "")))
+
+        if genre_filter and not movie_genres.intersection(genre_filter):
+            continue
+
+        # Avoid unrelated recommendations on movie detail pages.
+        if source is not None:
+            if content[i] < 0.035:
                 continue
-        output.append(card(int(i), {"content": round(float(content[i]), 4), "preference": round(float(user[i]), 4), "popularity": round(float(pop[i]), 4), "final": round(float(final[i]), 4)}))
-        if len(output) == limit: break
+
+            if source_genres and not (source_genres & movie_genres):
+                continue
+
+        output.append(card(i, {
+            "content": round(float(content[i]), 4),
+            "preference": round(float(user[i]), 4),
+            "popularity": round(float(pop[i]), 4),
+            "final": round(float(final[i]), 4),
+        }))
+
+        if len(output) >= limit:
+            break
+
     return output
+
 
 
 def by_title(title: str, session_id: str, limit: int) -> list[dict[str, Any]]:
