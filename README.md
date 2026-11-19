@@ -1,5 +1,10 @@
 # CineSense
 
+**Render deployment with Gemma included:** see [RENDER_DEPLOY.md](RENDER_DEPLOY.md).
+The repo contains a two-service blueprint: React Static Site and a paid Docker
+Web Service running FastAPI + private Ollama. Gemma weights are downloaded into
+the Docker image during build. No cloud AI key is needed.
+
 Local TF-IDF movie recommendations, SQLite preferences, optional local Gemma through Ollama, and a React frontend.
 
 ```powershell

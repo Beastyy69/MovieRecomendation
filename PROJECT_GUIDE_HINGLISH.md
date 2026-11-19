@@ -100,3 +100,24 @@ Explore par click karne se selected movie ki details aur recommendations section
 ## Security aur future
 
 `.env` ko GitHub par upload mat karo. Local preferences `user_preferences.db` mein store hoti hain. Future upgrades: TMDB posters/trailers, account login, MovieLens ratings se true collaborative filtering, aur semantic embeddings.
+# Render par Ollama ke saath hosting
+
+Ab `render.yaml` se sirf do services configure hoti hain: React Static Site aur
+Docker Web Service. Docker ke andar FastAPI + Ollama dono chalte hain. Gemma
+model build ke time `/opt/ollama/models` mein download hota hai; GitHub par heavy
+model file upload nahi hoti. Deploy ke baad laptop chalu rakhna zaroori nahi.
+
+Free 512 MB backend is model ke liye enough nahi hai. Blueprint paid Pro use
+karta hai; apply karne se pehle Render mein price aur RAM check karo. Disk same
+backend se attached hai aur Like/Seen SQLite data rakhti hai, koi third service
+nahi. Laptop ka personal preference DB repo mein upload nahi kiya gaya.
+
+Frontend `VITE_API_URL` mein actual backend URL do. Backend `CORS_ORIGINS` mein
+actual frontend URL do. TMDB key sirf backend settings mein rakho. Static Site
+mein `/*` se `/index.html` ka Rewrite add karo, taaki movie URL refresh chale.
+
+`/healthz` API/catalog readiness batata hai. `/health` Ollama online aur model
+available status deta hai. AI busy ya fail ho to TF-IDF recommendations phir bhi
+milti hain; response ko AI-generated hone ka false claim nahi kiya jata.
+
+Step-by-step settings, commands aur verification: [RENDER_DEPLOY.md](RENDER_DEPLOY.md).
