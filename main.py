@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:2b")
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+# One CPU inference at a time; avoid an unbounded queue on public hosting.
+AI_GATE = asyncio.Semaphore(1)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "")
 DB_PATH = Path(os.getenv("DB_PATH", str(ROOT / "user_preferences.db")))
 CORS_ORIGINS = [origin.strip().rstrip("/") for origin in os.getenv(
@@ -578,10 +581,20 @@ User: {message}
 Movies:
 {context}"""
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            r = await client.post(f"{OLLAMA_URL}/api/chat", json={"model": OLLAMA_MODEL, "messages": [{"role":"user","content":prompt}], "stream":False, "options":{"temperature":.3}})
-            r.raise_for_status(); return r.json().get("message", {}).get("content")
-    except httpx.HTTPError: return None
+        await asyncio.wait_for(AI_GATE.acquire(), timeout=0.1)
+    except TimeoutError:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT_SECONDS) as client:
+            r = await client.post(f"{OLLAMA_URL}/api/chat", json={"model": OLLAMA_MODEL,
+                "messages": [{"role":"user","content":prompt}], "stream":False,
+                "keep_alive":"5m", "options":{"temperature":.3, "num_ctx":2048, "num_predict":200}})
+            r.raise_for_status()
+            return r.json().get("message", {}).get("content")
+    except (httpx.HTTPError, ValueError):
+        return None
+    finally:
+        AI_GATE.release()
 
 
 def _validate_gemma_response(response: str | None, movies: list[dict[str, Any]]) -> str:
@@ -639,6 +652,6 @@ async def chat(value: ChatRequest) -> dict[str, Any]:
     response = _validate_gemma_response(raw_response, movies)
 
     if not ai_available:
-        response = "Ollama/Gemma available nahi hai. Local recommendations shown hain based on genre aur content matching. `ollama run gemma2:2b` chalao for AI explanations."
+        response = "Gemma abhi busy ya unavailable hai. Yeh recommendations aapki request ke genre aur content se match karti hain. AI explanation ke liye thodi der baad retry karein."
 
     return {"reply": response, "recommendations": movies, "ai_available": ai_available, "detected_genres": list(detected_genres)}
